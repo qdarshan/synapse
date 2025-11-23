@@ -1,0 +1,25 @@
+{
+  "manifest_version": 3,
+  "name": "Synapse",
+  "version": "1.0.0",
+  "description": "Read It Later Tool",
+  "icons": {
+    "48": "./images/icon_48.png",
+    "128": "./images/icon_128.png"
+  },
+  "content_scripts": [
+    {
+      "matches": ["https://*.hypermedia.systems/*"],
+      "js": ["Readability.js", "popup.js"],
+      "css": ["popup.css"]
+    }
+  ],
+  "background": {
+    "service_worker": "background.js"
+  },
+  "action": {
+    "default_popup": "popup.html"
+  },
+  "permissions": ["activeTab", "scripting", "tabs", "contextMenus"],
+  "host_permissions": ["http://localhost*"]
+}
