@@ -2,6 +2,7 @@ package database
 
 import (
 	"database/sql"
+	"fmt"
 	"log/slog"
 	"os"
 	"time"
@@ -32,13 +33,13 @@ func Initialize(filepath string) (*SQLiteManager, error) {
 		return nil, err
 	}
 
-	logger.Info("Database: Attempting to Ping connection...")
+	logger.Debug("Database: Attempting to Ping connection...")
 	if err := db.Ping(); err != nil {
 		logger.Error("Database: Failed to Ping connection", "error", err)
 		db.Close()
 		return nil, err
 	}
-	logger.Info("Database: Connection established successfully", "filepath", filepath)
+	logger.Debug("Database: Connection established successfully", "filepath", filepath)
 	db.SetMaxOpenConns(1)
 
 	return &SQLiteManager{DB: db}, nil
@@ -54,7 +55,7 @@ func (manager *SQLiteManager) SetupSchema() error {
 	);
 	`
 
-	logger.Info("Database: Setting up table schema...")
+	logger.Debug("Database: Setting up table schema...")
 	_, err := manager.DB.Exec(schema)
 
 	if err != nil {
@@ -62,7 +63,7 @@ func (manager *SQLiteManager) SetupSchema() error {
 		return err
 	}
 
-	logger.Info("Database: Schema created/verified successfully.")
+	logger.Debug("Database: Schema created/verified successfully.")
 
 	return nil
 }
@@ -86,9 +87,72 @@ func (manager *SQLiteManager) SaveNote(note Note) error {
 		return err
 	}
 
-	logger.Info("Database: Successfully saved a new note", "content_length", len(note.Content))
+	logger.Debug("Database: Successfully saved a new note", "content_length", len(note.Content))
 
 	return nil
+}
+
+func (manager *SQLiteManager) DeleteNote(id int) error {
+	deleteNoteQuery := `
+			DELETE FROM notes WHERE id = ?;
+		`
+
+	stmt, err := manager.DB.Prepare(deleteNoteQuery)
+	if err != nil {
+		logger.Error("Database: Failed to PREPARE statement for note deletion", "error", err)
+		return err
+	}
+
+	defer stmt.Close()
+
+	_, err = stmt.Exec(id)
+	if err != nil {
+		logger.Error("Database: Failed to EXECUTE statement for note deletion", "error", err)
+		return err
+	}
+
+	logger.Debug("Database: Successfully deleted note.")
+
+	return nil
+}
+
+func (manager *SQLiteManager) GetNoteById(id int) (*Note, error) {
+	getNoteByIdQuery := `SELECT id, content, embedding_vector, created_at FROM notes WHERE id = ?`
+
+	rows, err := manager.DB.Query(getNoteByIdQuery, id)
+	if err != nil {
+		logger.Error("Database: Failed to execute SELECT query for note by id", "error", err)
+		return nil, err
+	}
+
+	defer rows.Close()
+
+	if !rows.Next() {
+		if err := rows.Err(); err != nil {
+			return nil, fmt.Errorf("error during row iteration: %w", err)
+		}
+		return nil, nil
+	}
+
+	var note Note
+
+	err = rows.Scan(
+		&note.Id,
+		&note.Content,
+		&note.EmbeddingVector,
+		&note.CreatedAt,
+	)
+
+	if err != nil {
+		logger.Error("Database: Failed to scan row data into Note struct", "error", err)
+		return nil, err
+	}
+
+	if rows.Next() {
+		logger.Warn("Database: Query returned more than one note for a unique Id.", "id", note.Id)
+	}
+
+	return &note, nil
 }
 
 func (manager *SQLiteManager) GetAllNotes() ([]Note, error) {
@@ -103,7 +167,6 @@ func (manager *SQLiteManager) GetAllNotes() ([]Note, error) {
 	notes := make([]Note, 0)
 	defer rows.Close()
 
-	var distance sql.NullFloat64
 	for rows.Next() {
 		var note Note
 		err := rows.Scan(
@@ -111,14 +174,7 @@ func (manager *SQLiteManager) GetAllNotes() ([]Note, error) {
 			&note.Content,
 			&note.EmbeddingVector,
 			&note.CreatedAt,
-			distance,
 		)
-
-		if distance.Valid {
-			note.Distance = distance.Float64
-		} else {
-			note.Distance = 999.0
-		}
 
 		if err != nil {
 			logger.Error("Database: Failed to scan row data into Note struct", "error", err)
@@ -132,7 +188,7 @@ func (manager *SQLiteManager) GetAllNotes() ([]Note, error) {
 		return nil, err
 	}
 
-	logger.Info("Database: Successfully retrieved all notes", "count", len(notes))
+	logger.Debug("Database: Successfully retrieved all notes", "count", len(notes))
 	return notes, nil
 }
 
@@ -160,14 +216,20 @@ func (manager *SQLiteManager) SearchNotes(queryVector []byte) ([]Note, error) {
 
 	for rows.Next() {
 		var note Note
-
+		var distance sql.NullFloat64
 		err := rows.Scan(
 			&note.Id,
 			&note.Content,
 			&note.EmbeddingVector,
 			&note.CreatedAt,
-			&note.Distance,
+			&distance,
 		)
+
+		if distance.Valid {
+			note.Distance = distance.Float64
+		} else {
+			note.Distance = 999.0
+		}
 
 		if err != nil {
 			logger.Error("Database: Failed to scan row data into Note struct", "error", err)
@@ -182,6 +244,6 @@ func (manager *SQLiteManager) SearchNotes(queryVector []byte) ([]Note, error) {
 		return nil, err
 	}
 
-	logger.Info("Database: Successfully found notes", "count", len(notes))
+	logger.Debug("Database: Successfully found notes", "count", len(notes))
 	return notes, nil
 }

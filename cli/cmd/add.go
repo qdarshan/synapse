@@ -9,8 +9,18 @@ import (
 )
 
 var addCmd = &cobra.Command{
-	Use:   "add [note text]",
-	Short: "Adds a new note and generates its embedding.",
+	Use:   "add <note text>",
+	Short: "Add a new note to your knowledge base.",
+	Long: `Create a new note and automatically generate its semantic embedding.
+
+The note will be stored in the database along with its embedding vector,
+enabling semantic search across your knowledge base.
+
+Examples:
+  synapse add "Einstein's theory of relativity"
+  synapse add "Machine learning is a subset of AI"`,
+
+	Args: cobra.MinimumNArgs(1),
 	RunE: func(cmd *cobra.Command, args []string) error {
 		noteContent := args[0]
 
