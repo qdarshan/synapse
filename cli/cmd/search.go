@@ -3,6 +3,7 @@ package cmd
 import (
 	"fmt"
 	"os"
+	"synapse/client"
 	"synapse/database"
 	"text/tabwriter"
 
@@ -14,9 +15,13 @@ var searchCmd = &cobra.Command{
 	Short: "",
 	RunE: func(cmd *cobra.Command, args []string) error {
 		noteContent := args[0]
-		_ = noteContent
-		dummyFloats := []float64{0.5, 0.5, 0.5}
-		embeddingBytes, err := database.FloatSliceToBytes(dummyFloats)
+
+		embeddingFloats, err := client.GenerateEmbedding(noteContent)
+		if err != nil {
+			return fmt.Errorf("failed to get embeddings from LMStudio: %w", err)
+		}
+
+		embeddingBytes, err := database.FloatSliceToBytes(embeddingFloats)
 		if err != nil {
 			return fmt.Errorf("failed to encode embedding vector: %w", err)
 		}

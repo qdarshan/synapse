@@ -2,6 +2,7 @@ package cmd
 
 import (
 	"fmt"
+	"synapse/client"
 	"synapse/database"
 
 	"github.com/spf13/cobra"
@@ -13,8 +14,12 @@ var addCmd = &cobra.Command{
 	RunE: func(cmd *cobra.Command, args []string) error {
 		noteContent := args[0]
 
-		dummyFloats := []float64{0.5, 0.5, 0.5}
-		embeddingBytes, err := database.FloatSliceToBytes(dummyFloats)
+		embeddingFloats, err := client.GenerateEmbedding(noteContent)
+		if err != nil {
+			return fmt.Errorf("failed to get embeddings from LMStudio: %w", err)
+		}
+
+		embeddingBytes, err := database.FloatSliceToBytes(embeddingFloats)
 		if err != nil {
 			return fmt.Errorf("failed to encode embedding vector: %w", err)
 		}
