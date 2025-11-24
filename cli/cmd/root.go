@@ -5,12 +5,14 @@ import (
 	"log/slog"
 	"os"
 	"synapse/database"
+	"synapse/service"
 
 	"github.com/spf13/cobra"
 )
 
 var dbManager *database.SQLiteManager
 var dbFilepath = "synapse.db"
+var noteService *service.NoteService
 
 var rootCmd = &cobra.Command{
 	Use:   "synapse",
@@ -30,11 +32,17 @@ var rootCmd = &cobra.Command{
 
 		slog.Debug("Database initialized and ready.", "path", dbFilepath)
 
+		noteService = service.NewNoteService(dbManager)
+
 		return nil
 	},
 	PersistentPostRun: func(cmd *cobra.Command, args []string) {
-		if dbManager != nil && dbManager.DB != nil {
-			dbManager.DB.Close()
+		if dbManager == nil || dbManager.DB == nil {
+			return
+		}
+		if err := dbManager.DB.Close(); err != nil {
+			slog.Error("Failed to close database connection", "error", err)
+		} else {
 			slog.Debug("Database connection closed.")
 		}
 	},

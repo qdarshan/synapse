@@ -25,8 +25,9 @@ Examples:
 		if err != nil {
 			return fmt.Errorf("invalid ID format: %s is not a valid integer. Please provide a numeric ID", id)
 		}
-		if err := dbManager.DeleteNote(noteID); err != nil {
-			return fmt.Errorf("failed to delete note: %w", err)
+
+		if err := noteService.Delete(noteID); err != nil {
+			return err
 		}
 		fmt.Printf("Success: Note deleted successfully.")
 		return nil

@@ -4,8 +4,6 @@ import (
 	"fmt"
 	"os"
 	"strconv"
-	"synapse/client"
-	"synapse/database"
 	"text/tabwriter"
 
 	"github.com/spf13/cobra"
@@ -40,9 +38,9 @@ Examples:
 				return fmt.Errorf("error: Id search requires a numeric argument, received '%s'", input)
 			}
 
-			note, err := dbManager.GetNoteById(noteId)
+			note, err := noteService.GetByID(noteId)
 			if err != nil {
-				return fmt.Errorf("failed to retrieve note by ID %d: %w", noteId, err)
+				return err
 			}
 
 			if note != nil {
@@ -53,19 +51,9 @@ Examples:
 			return nil
 		}
 
-		embeddingFloats, err := client.GenerateEmbedding(input)
+		notes, err := noteService.SemanticSearch(cmd.Context(), input)
 		if err != nil {
-			return fmt.Errorf("failed to get embeddings from LMStudio: %w", err)
-		}
-
-		embeddingBytes, err := database.FloatSliceToBytes(embeddingFloats)
-		if err != nil {
-			return fmt.Errorf("failed to encode embedding vector: %w", err)
-		}
-
-		notes, err := dbManager.SearchNotes(embeddingBytes)
-		if err != nil {
-			return fmt.Errorf("failed to search the note: %w", err)
+			return err
 		}
 
 		w := tabwriter.NewWriter(os.Stdout, 0, 0, 3, ' ', 0)

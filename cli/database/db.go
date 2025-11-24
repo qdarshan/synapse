@@ -12,6 +12,8 @@ import (
 
 type SQLiteManager struct {
 	DB *sql.DB
+	saveNoteStmt *sql.Stmt
+	deleteNoteStmt *sql.Stmt
 }
 
 type Note struct {
@@ -42,7 +44,13 @@ func Initialize(filepath string) (*SQLiteManager, error) {
 	logger.Debug("Database: Connection established successfully", "filepath", filepath)
 	db.SetMaxOpenConns(1)
 
-	return &SQLiteManager{DB: db}, nil
+	manager := &SQLiteManager{DB: db}
+	if err := manager.prepareStatements(); err != nil {
+		db.Close()
+		return nil, err
+	}
+
+	return manager, nil
 }
 
 func (manager *SQLiteManager) SetupSchema() error {
@@ -68,23 +76,33 @@ func (manager *SQLiteManager) SetupSchema() error {
 	return nil
 }
 
-func (manager *SQLiteManager) SaveNote(note Note) error {
-	saveNoteQuery := `
-			INSERT INTO notes (content, embedding_vector) VALUES(?, ?);
-		`
-
+func (manager *SQLiteManager) prepareStatements() error {
+	saveNoteQuery := `INSERT INTO notes (content, embedding_vector) VALUES(?, ?);`
 	stmt, err := manager.DB.Prepare(saveNoteQuery)
 	if err != nil {
-		logger.Error("Database: Failed to PREPARE statement for note insertion", "error", err)
-		return err
+		logger.Error("Database: Failed to prepare save note statement", "error", err)
+		return fmt.Errorf("failed to prepare save note statement: %w", err)
 	}
+	manager.saveNoteStmt = stmt
 
-	defer stmt.Close()
+	deleteNoteQuery := `DELETE FROM notes WHERE id = ?;`
+	stmt, err = manager.DB.Prepare(deleteNoteQuery)
+	if err != nil {
+		logger.Error("Database: Failed to prepare delete note statement", "error", err)
+		manager.saveNoteStmt.Close()
+		return fmt.Errorf("failed to prepare delete note statement: %w", err)
+	}
+	manager.deleteNoteStmt = stmt
 
-	_, err = stmt.Exec(note.Content, note.EmbeddingVector)
+	logger.Debug("Database: Prepared statements cached successfully")
+	return nil
+}
+
+func (manager *SQLiteManager) SaveNote(note Note) error {
+	_, err := manager.saveNoteStmt.Exec(note.Content, note.EmbeddingVector)
 	if err != nil {
 		logger.Error("Database: Failed to EXECUTE statement for note insertion", "error", err)
-		return err
+		return fmt.Errorf("failed to execute statement for note insertion: %w", err)
 	}
 
 	logger.Debug("Database: Successfully saved a new note", "content_length", len(note.Content))
@@ -93,25 +111,13 @@ func (manager *SQLiteManager) SaveNote(note Note) error {
 }
 
 func (manager *SQLiteManager) DeleteNote(id int) error {
-	deleteNoteQuery := `
-			DELETE FROM notes WHERE id = ?;
-		`
-
-	stmt, err := manager.DB.Prepare(deleteNoteQuery)
-	if err != nil {
-		logger.Error("Database: Failed to PREPARE statement for note deletion", "error", err)
-		return err
-	}
-
-	defer stmt.Close()
-
-	_, err = stmt.Exec(id)
+	_, err := manager.deleteNoteStmt.Exec(id)
 	if err != nil {
 		logger.Error("Database: Failed to EXECUTE statement for note deletion", "error", err)
-		return err
+		return fmt.Errorf("failed to execute statement for note deletion: %w", err)
 	}
 
-	logger.Debug("Database: Successfully deleted note.")
+	logger.Debug("Database: Successfully deleted note", "id", id)
 
 	return nil
 }
